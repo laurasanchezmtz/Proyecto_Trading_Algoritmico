@@ -1,0 +1,20 @@
+# Entornos virtuales
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Archivos privados
+.env
+.env.*
+!.env.example
+
+# Archivos temporales
+*.log
+.DS_Store
+.spark-warehouse/
+spark-warehouse/
+.checkpoints/

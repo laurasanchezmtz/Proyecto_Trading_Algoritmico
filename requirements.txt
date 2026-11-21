@@ -1,0 +1,3 @@
+# Dependencia Python usada por el productor de ticks en este corte.
+# Versión exacta local aún no registrada; fijarla después de comprobar pip show.
+confluent-kafka
