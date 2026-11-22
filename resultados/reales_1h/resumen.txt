@@ -1,0 +1,15 @@
+Backtesting SMA_10_50 (pseudocódigo del profesor) sobre EURUSD
+  velas analizadas: 6141
+  periodo: 2025-11-21T00:00:00Z a 2026-11-20T22:00:00Z
+  operaciones: 86
+  ganadoras: 22
+  % ganadoras: 25.6
+  pips totales: -663.1
+  pips promedio por operación: -7.71
+  mejor operación (pips): 208.4
+  peor operación (pips): -95.5
+  caída máxima (pips): 975.0
+  ganancia total (USD): -57.87
+  costo total por spread (pips): 86.0
+  salidas por motivo: {'CRUCE_BAJISTA': 86}
+  comparación: comprar y mantener (pips): -564.5
