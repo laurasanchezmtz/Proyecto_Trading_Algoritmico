@@ -4,3 +4,5 @@ confluent-kafka
 pandas
 matplotlib
 yfinance
+
+ib_async==2.1.0
