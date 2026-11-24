@@ -18,3 +18,5 @@ __pycache__/
 .spark-warehouse/
 spark-warehouse/
 .checkpoints/
+
+datos_prueba/ejecutor_prueba.sqlite3*

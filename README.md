@@ -1,167 +1,603 @@
+
 # Proyecto de Trading Algorítmico
 
-**Proyecto escolar | Licenciatura en Inteligencia Artificial y Ciencia de Datos**  
-**Equipo:** 6 estudiantes  
-**Corte documentado:** 21 de noviembre de 2026  
-**Estado:** En desarrollo; infraestructura Kafka y lectura desde Spark comprobadas con datos ficticios.
+**Proyecto escolar | Licenciatura en Inteligencia Artificial y Ciencia de Datos**
 
-> **Aviso:** Este proyecto es educativo. En esta etapa no recibe cotizaciones reales ni envía órdenes a Interactive Brokers. Las operaciones previstas serán exclusivamente en una cuenta **paper** (simulada), nunca con dinero real.
+**Equipo:** 6 estudiantes
+**Corte documentado:** 24 de noviembre de 2026
+**Estado:** En desarrollo e integración de componentes.
+
+> **Aviso:** Este proyecto tiene fines exclusivamente educativos. Se ha verificado la recepción de cotizaciones de EURUSD mediante Interactive Brokers en una sesión Paper Trading. No se han enviado órdenes. Todas las operaciones futuras deberán realizarse exclusivamente en una cuenta simulada, nunca con dinero real.
 
 ## 1. ¿Qué queremos construir?
 
-Un sistema de *trading algorítmico*: programas que reciben precios de un activo financiero, los procesan y aplican reglas matemáticas para producir señales de compra o venta.
+Un sistema de trading algorítmico: programas que reciben precios de un activo financiero, los procesan y aplican reglas matemáticas para producir señales de compra o venta.
 
 El profesor solicita:
 
-1. **Interactive Brokers (IBKR) en modo demo/paper** como fuente de cotizaciones de FOREX, preferentemente **EURUSD** o **GBPUSD**.
-2. **Apache Kafka** como medio para intercambiar eventos de precios.
-3. **Apache Spark Structured Streaming** para convertir cotizaciones (*ticks*) en velas de **un minuto**.
-4. Uno o varios algoritmos que lean ticks o velas y publiquen señales **BUY/SELL**.
-5. Un programa ejecutor que revise los riesgos y envíe las órdenes **solo a la cuenta paper**.
-6. **Opcional/deseable:** *backtesting* (evaluar una estrategia usando datos históricos).
+1. Interactive Brokers (IBKR) en modo demo/paper como fuente de cotizaciones de FOREX, preferentemente EURUSD o GBPUSD.
+2. Apache Kafka como medio para intercambiar eventos de precios.
+3. Apache Spark Structured Streaming para convertir cotizaciones (ticks) en velas de un minuto.
+4. Uno o varios algoritmos que lean ticks o velas y publiquen señales BUY/SELL.
+5. Un programa ejecutor que revise los riesgos y envíe órdenes exclusivamente a la cuenta paper.
+6. Opcional/deseable: backtesting, para evaluar una estrategia utilizando datos históricos.
 
-El profesor también exige **formatos comunes de eventos** para que los algoritmos de un equipo puedan ejecutarse sobre la plataforma de otro.
+El profesor también exige formatos comunes de eventos para que los algoritmos de un equipo puedan ejecutarse sobre la plataforma de otro.
 
-**Elección inicial del equipo (propuesta, no exigencia adicional del profesor):** desarrollar primero una estrategia de medias móviles simples de 10 y 50 velas para **EURUSD**. El pseudocódigo del profesor usa BTC/USDT, que habrá que adaptar a FOREX.
+### Elección del equipo
 
-## 2. ¿Cómo viaja la información?
+Desarrollar inicialmente una estrategia de medias móviles simples de 10 y 50 velas para EURUSD, adaptando el pseudocódigo del profesor de BTC/USDT al mercado FOREX.
+
+---
+
+## 2. Arquitectura del sistema
 
 ```mermaid
 flowchart TD
-    A[Interactive Brokers paper<br/>Fuente prevista de precios] -->|Productor Python| B[Kafka: ticks]
-    T[Generador Python<br/>Datos ficticios de prueba] -->|Disponible actualmente| B
-    B --> C[Spark Structured Streaming<br/>Agrupa por minuto y calcula OHLC]
-    C --> D[Kafka: velas]
-    D --> E[Algoritmo de medias móviles<br/>SMA 10 / SMA 50]
-    E --> F[Kafka: signals]
-    F --> G[Ejecutor + controles de riesgo]
-    G --> H[Órdenes en IBKR paper]
+    A["Interactive Brokers - Paper Trading"] --> B["Trader Workstation"]
+    B <-->|"API TCP - localhost:7497"| C["Python - ib_async"]
+    C --> D["productor_ibkr.py"]
+    T["productor_ticks.py - Datos ficticios"] --> E["Kafka: ticks"]
+    D --> E
+    E --> F["Spark Structured Streaming"]
+    F --> G["Kafka: velas"]
+    G --> H["Estrategia SMA 10/50"]
+    H --> I["Kafka: signals"]
+    I --> J["Ejecutor y controles de riesgo"]
+    J --> K["Ordenes simuladas en IBKR"]
+    L["Datos historicos o sinteticos"] --> M["Backtesting"]
+    H -.->|"Logica reutilizable"| M
 ```
 
-**Conceptos clave:**
+### 2.1. Responsabilidad de cada componente
 
-- **Tick:** un mensaje que contiene una cotización, incluidos precios `bid` (precio al que el bróker compra) y `ask` (precio al que vende).
-- **Tópico:** canal de Kafka que almacena mensajes de un tipo, como `ticks`.
-- **Productor:** programa que envía mensajes a Kafka. **Consumidor:** programa que los lee.
-- **Streaming:** procesamiento de datos que llegan de forma continua.
-- **Vela OHLC:** resumen de precios de un periodo: **O**pen/apertura, **H**igh/máximo, **L**ow/mínimo y **C**lose/cierre.
-- **SMA (media móvil simple):** promedio de los cierres de las últimas N velas.
-- **Stop Loss:** regla de salida para limitar una pérdida. **Take Profit:** regla de salida al alcanzar un objetivo de ganancia.
+| Componente | Responsabilidad |
+|---|---|
+| Interactive Brokers | Fuente de cotizaciones y destino previsto de órdenes simuladas. |
+| Trader Workstation | Gestionar la sesión y proporcionar acceso a la API. |
+| ib_async | Facilitar la comunicación entre Python y TWS. |
+| Productor IBKR | Preparar cotizaciones para publicarlas en Kafka. |
+| Productor ficticio | Generar datos controlados para pruebas. |
+| Kafka | Transportar eventos entre componentes independientes. |
+| Spark | Procesar cotizaciones y construir velas OHLC. |
+| Estrategia SMA | Evaluar velas y generar señales BUY/SELL. |
+| Ejecutor | Validar riesgos y autorizar o rechazar operaciones simuladas. |
+| Backtesting | Evaluar la estrategia mediante datos históricos o sintéticos. |
 
-## 3. Avance real al 21/11/2026
+### 2.2. Conceptos clave
 
-| Componente o prueba | Estado | Evidencia comprobada |
+- **API:** interfaz que permite la comunicación entre aplicaciones.
+- **Socket TCP:** canal de comunicación entre procesos informáticos.
+- **Tick:** mensaje que contiene una cotización.
+- **BID:** precio disponible para vender la divisa base.
+- **ASK:** precio disponible para comprar la divisa base.
+- **Spread:** diferencia entre ASK y BID.
+- **Tópico:** canal de Kafka que almacena mensajes de un determinado tipo.
+- **Productor:** programa que publica mensajes.
+- **Consumidor:** programa que recibe mensajes.
+- **Streaming:** procesamiento de datos que llegan continuamente.
+- **OHLC:** apertura, máximo, mínimo y cierre de un periodo.
+- **SMA:** promedio simple de los cierres de las últimas N velas.
+- **Stop Loss:** regla de salida ante una variación adversa.
+- **Take Profit:** regla de salida al alcanzar un objetivo de ganancia.
+- **Backtesting:** simulación de una estrategia sobre datos anteriores.
+
+---
+
+## 3. Estado del proyecto
+
+### 3.1. Infraestructura comprobada al 21 de noviembre de 2026
+
+Estas pruebas corresponden a la computadora ejecutora utilizada durante la configuración inicial del equipo.
+
+| Componente o prueba | Estado | Evidencia documentada |
 |---|---|---|
-| Windows 11, Python y entorno virtual `.venv` | ✅ Verificado | Python 3.11.9 activo |
-| Docker Desktop + WSL 2 | ✅ Verificado | `hello-world` exitoso |
-| Kafka 4.4.0 en Docker | ✅ Verificado | Contenedor `kafka-trading` activo y `cluster-id` obtenido |
-| Tópicos `ticks`, `velas`, `signals` | ✅ Creados | `kafka-topics.sh --list` mostró los tres |
-| Envío de un mensaje manual a `ticks` | ✅ Probado | Mensaje JSON recibido por consumidor |
-| Productor Python de datos ficticios | ✅ Probado | Dos ejecuciones de 5 cotizaciones cada una |
-| Spark 4.2.1 en Docker | ✅ Verificado | `spark-submit --version` correcto |
-| Conectividad TCP Spark → Kafka | ✅ Verificada | Conexión al puerto 9092 exitosa |
-| Lectura Spark Structured Streaming desde `ticks` | ✅ Probada | Spark mostró 11 mensajes en consola |
-| Conversión de ticks a velas de un minuto | ⏳ Pendiente | Próximo desarrollo: paso 15 |
-| Publicación de velas en Kafka | ⏳ Pendiente | Tópico `velas` ya existe, pero no se han publicado velas |
-| Algoritmo SMA 10/50 y `signals` | ⏳ Pendiente | Sin señales generadas aún |
-| Ejecutor con controles de riesgo | ⏳ Pendiente | Sin órdenes enviadas |
-| IBKR cuenta paper / API / cotizaciones | ⏳ Bloqueado | Cuenta creada; verificación todavía pendiente |
-| Backtesting | ◇ Opcional | No iniciado |
+| Windows 11 y Python | Verificado | Python 3.11.9 activo |
+| Entorno virtual .venv | Verificado | Activación correcta |
+| Docker Desktop y WSL 2 | Verificado | hello-world exitoso |
+| Kafka 4.4.0 | Verificado | Contenedor kafka-trading y cluster ID |
+| Tópicos ticks, velas y signals | Creados | Listado correcto de los tres tópicos |
+| Productor y consumidor manuales | Probados | Mensaje JSON recibido |
+| Productor Python ficticio | Probado | Dos ejecuciones de cinco cotizaciones |
+| Spark 4.2.1 | Verificado | spark-submit --version |
+| Conectividad Spark-Kafka | Verificada | Conexión TCP al puerto 9092 |
+| Lectura de ticks mediante Spark | Probada | Once mensajes recibidos |
 
-**Resultado clave de la última prueba:** se recibieron **11 mensajes de prueba**: 1 manual y 10 generados por Python. La lectura con Spark funcionó tras configurar una carpeta temporal válida para Apache Ivy (`spark.jars.ivy=/tmp/spark-ivy`).
+La lectura de Spark funcionó después de configurar una carpeta temporal válida para Apache Ivy:
+
+    spark.jars.ivy=/tmp/spark-ivy
+
+Estas pruebas utilizaron datos ficticios.
+
+### 3.2. Estrategia y backtesting
+
+Desarrollo documentado por Laura M. Sánchez Martínez.
+
+| Componente | Estado documentado |
+|---|---|
+| Generador de velas sintéticas | Implementado |
+| Estrategia SMA 10/50 | Implementada y probada con datos ficticios |
+| Pruebas automatizadas | Diez pruebas documentadas |
+| Adaptador de estrategia para Kafka | Implementado; integración completa pendiente |
+| Descarga de datos históricos | Implementada |
+| Backtesting | Implementado, con resultados documentados |
+
+La lógica de la estrategia está separada de Kafka, permitiendo reutilizarla tanto en el procesamiento continuo como en el backtesting.
+
+Consultar:
+
+[Guía de estrategia SMA 10/50 y backtesting](docs/docs/GUIA_ESTRATEGIA_Y_BACKTESTING.md)
+
+Los resultados se encuentran documentados por la responsable del desarrollo. Este corte no constituye una nueva ejecución independiente de sus pruebas.
+
+### 3.3. Interactive Brokers: avances del 24 de noviembre de 2026
+
+Las pruebas de conexión API se realizaron en una computadora Windows diferente de la configuración inicial de Docker.
+
+| Componente o prueba | Estado |
+|---|---|
+| Instalación de Trader Workstation | Verificada |
+| Inicio de sesión Paper Trading | Verificado |
+| Configuración de API mediante sockets | Verificada |
+| Conectividad TCP localhost:7497 | Verificada |
+| Instalación de ib_async 2.1.0 | Verificada |
+| Comunicación mediante TWS API | Verificada |
+| Recepción de cotizaciones EURUSD | Verificada |
+| Recepción continua durante 30 segundos | Verificada |
+| Actualización de requirements.txt | Realizada |
+| Desarrollo de productor_ibkr.py | Realizado |
+| Validación de sintaxis del productor | Aprobada |
+| Publicación de cotizaciones IBKR en Kafka | Pendiente |
+| Integración completa con Spark | Pendiente |
+| Envío de órdenes simuladas | No realizado |
+
+La conexión con IBKR se comprobó sin utilizar Docker.
+
+La biblioteca reportó datos de mercado de tipo 1 durante la prueba. No se realizó una medición independiente de latencia ni una auditoría completa de los permisos de mercado.
+
+Consultar:
+
+[Integración de la API de Interactive Brokers](docs/INTEGRACION_API_IBKR.md)
+
+### 3.4. Estado de la integración completa
+
+| Actividad | Estado |
+|---|---|
+| Conversión de ticks a velas OHLC de un minuto | Pendiente |
+| Publicación de velas terminadas en Kafka | Pendiente |
+| Integración de productor IBKR con Kafka | Pendiente de prueba |
+| Integración Spark con estrategia SMA | Pendiente |
+| Publicación integrada de señales BUY/SELL | Pendiente de validación |
+| Ejecutor con controles de riesgo | Pendiente |
+| Pruebas de extremo a extremo | Pendientes |
+| Documentación final y exposición | En progreso |
+
+No debe confundirse el funcionamiento individual de un componente con la validación del sistema completo.
+
+---
 
 ## 4. Estructura del proyecto
 
+Estructura relevante del repositorio al corte documentado:
+
 ```text
 Proyecto_Trading_Algoritmico/
-├── .venv/                    # Entorno local de Python: NO subir a Git
-├── venv/                     # Segundo entorno detectado: NO subir a Git
-├── src/
-│   ├── productor_ticks.py    # Generador Python de ticks ficticios (ya probado)
-│   └── leer_ticks_spark.py   # Lector de Kafka con Spark (ya probado)
-├── config/                   # Configuraciones; pendiente de desarrollar
-├── datos_prueba/             # Datos sintéticos para pruebas
-├── tests/                    # Pruebas automatizadas futuras
-├── evidencias/               # Capturas sin datos privados
+├── datos_prueba/
+│   └── velas_sinteticas.csv
 ├── docs/
-│   ├── REQUERIMIENTOS_TECNICOS.md
-│   ├── INSTALACION_PASO_A_PASO.md
-│   └── MAPA_DE_TRABAJO.md
-├── requirements.txt         # Dependencia Python verificada a nivel de librería
+│   ├── INTEGRACION_API_IBKR.md
+│   ├── config/
+│   ├── datos_prueba/
+│   ├── evidencias/
+│   ├── tests/
+│   └── docs/
+│       ├── GUIA_ESTRATEGIA_Y_BACKTESTING.md
+│       ├── INSTALACION_PASO_A_PASO.md
+│       ├── MAPA_DE_TRABAJO.md
+│       └── REQUERIMIENTOS_TECNICOS.md
+├── resultados/
+│   ├── grafica.png
+│   ├── operaciones.csv
+│   ├── resumen.txt
+│   ├── reales/
+│   └── reales_1h/
+├── src/
+│   ├── backtesting.py
+│   ├── descargar_datos.py
+│   ├── estrategia_kafka.py
+│   ├── estrategia_sma.py
+│   ├── generar_velas_prueba.py
+│   ├── leer_ticks_spark.py
+│   ├── productor_ticks.py
+│   └── productor_ibkr.py
+├── tests/
+│   └── test_estrategia_sma.py
+├── requirements.txt
 ├── .gitignore
 └── README.md
 ```
 
-> Los archivos de `src` están en la computadora donde trabaja el equipo y **no se incluyen en el paquete de documentación**. Deben conservarse y agregarse al mismo repositorio al hacer el commit. Git no rastrea carpetas vacías; se incluyen archivos `.gitkeep` para conservar la estructura.
+Los entornos virtuales venv y .venv son locales y no deben publicarse en GitHub.
+
+La estructura conserva las rutas existentes del repositorio. No se han reorganizado las carpetas ni modificado los archivos de otros integrantes.
+
+---
 
 ## 5. Instalación y preparación para un integrante nuevo
 
-**Se trabaja con una sola computadora ejecutora; los otros cinco integrantes siguen la sesión, observan los resultados y documentan las decisiones.**
+La instalación depende del componente que se desea ejecutar.
 
-**¿Vas a preparar una computadora por primera vez?** Comienza aquí: **[INSTALACIÓN PASO A PASO (Windows 11)](docs/INSTALACION_PASO_A_PASO.md)**. Incluye descargas oficiales, órdenes exactas en PowerShell, resultados esperados, resolución de errores y qué no se debe reinstalar. No es necesario instalar todo para seguir la sesión por pantalla.
+No todos los integrantes necesitan instalar simultáneamente toda la infraestructura para reproducir pruebas individuales.
 
-**¿Vas a continuar en la computadora de María?** Usa la [Sección B de la guía de instalación](docs/INSTALACION_PASO_A_PASO.md#b-continuar-en-la-computadora-que-ya-funciona); no clones ni recrees contenedores que ya existen.
+### 5.1. Documentación disponible
 
+| Documento | Contenido |
+|---|---|
+| [Instalación paso a paso](docs/docs/INSTALACION_PASO_A_PASO.md) | Preparación inicial de Windows, Python, Docker, Kafka y Spark. |
+| [Requerimientos técnicos](docs/docs/REQUERIMIENTOS_TECNICOS.md) | Entorno y requisitos del proyecto. |
+| [Mapa de trabajo](docs/docs/MAPA_DE_TRABAJO.md) | Arquitectura, actividades y criterios de aceptación. |
+| [Estrategia y backtesting](docs/docs/GUIA_ESTRATEGIA_Y_BACKTESTING.md) | Desarrollo, ejecución, pruebas y resultados de la estrategia. |
+| [Integración API IBKR](docs/INTEGRACION_API_IBKR.md) | Instalación de TWS, configuración API, conexión y cotizaciones. |
 
-1. Leer este `README.md` y el [mapa de trabajo](docs/MAPA_DE_TRABAJO.md).
-2. Revisar los [requerimientos técnicos](docs/REQUERIMIENTOS_TECNICOS.md).
-3. Abrir la carpeta local del proyecto en Visual Studio Code (VS Code).
-4. Abrir PowerShell en la raíz del proyecto y activar el entorno: `.\.venv\Scripts\Activate.ps1` (si `.venv` existe; para una computadora nueva ver guía de instalación).
-5. Comprobar Docker y Kafka: `docker ps` y `docker exec kafka-trading /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092`.
-6. Para probar el generador de ticks (con Kafka encendido): `python src/productor_ticks.py`.
-7. Para repetir la lectura con Spark, usar el comando reproducible del documento de requerimientos.
+### 5.2. Preparación de Python
 
-**Nota:** La ruta `C:\Users\maria\Desktop\Proyecto_Trading_Algoritmico` corresponde a la computadora ejecutora actual. En otra computadora será distinta.
+Abrir una terminal en la raíz del repositorio.
 
-## 6. Formatos oficiales de eventos
+Si no existe un entorno virtual, crearlo:
 
-Los nombres de campo y de tópico son los especificados por el profesor. Los valores siguientes son únicamente ejemplos ficticios; para las fechas se propone ISO 8601 en UTC.
-
-**Tópico `ticks`:**
-
-```json
-{"symbol":"EURUSD","bid":1.0850,"ask":1.0852,"timestamp":"2026-11-21T17:51:18Z"}
+```bash
+python -m venv venv
 ```
 
-**Tópico `velas` (todavía no implementado):**
+Activación desde Git Bash en Windows:
 
-```json
-{"symbol":"EURUSD","inicio":"2026-11-21T17:51:00Z","open":1.0851,"high":1.0855,"low":1.0851,"close":1.0855,"num_ticks":5}
+```bash
+source venv/Scripts/activate
 ```
 
-**Tópico `signals` (todavía no implementado):**
+Activación desde PowerShell:
 
-```json
-{"id_algoritmo":"SMA_10_50","symbol":"EURUSD","signal":"BUY","precio_referencia":1.0855,"timestamp":"2026-11-21T17:52:00Z"}
+```powershell
+.\venv\Scripts\Activate.ps1
 ```
 
-**Decisión por confirmar:** usar el precio medio `mid = (bid + ask) / 2` para construir las velas. El profesor especificó los campos, pero no qué precio se debe usar para el OHLC. Esto afecta el cálculo de señales; las órdenes reales de paper trading deben considerar precios bid/ask, spread y comisiones.
+Si el entorno existente se llama .venv, ajustar la ruta correspondiente.
 
-## 7. Estrategia propuesta
+Instalar las dependencias:
 
-Partimos del pseudocódigo **Trading_Cruce_Medias_Moviles** entregado por el profesor:
+```bash
+python -m pip install -r requirements.txt
+```
 
-- **SMA corta:** 10 velas. **SMA larga:** 50 velas.
-- **Comprar:** cuando SMA corta sea mayor que SMA larga y no haya una posición abierta.
-- **Cerrar la posición:** por Stop Loss (2 % de variación adversa del precio), Take Profit (4 % de variación favorable) o cuando SMA corta sea menor que SMA larga.
-- **Capital por operación:** el pseudocódigo usa `1000`, sin precisar su aplicación a FOREX; tamaño y divisa deben definirse antes de operar.
+### 5.3. Dependencias del proyecto
 
-**Precisión:** comparar `SMA_corta > SMA_larga` no equivale a detectar el instante exacto de un cruce. El primer desarrollo seguirá la lógica proporcionada y documentará cualquier ajuste. Un Stop Loss del 2 % en precio **no** equivale necesariamente a arriesgar el 2 % del capital de la cuenta.
+| Biblioteca | Función |
+|---|---|
+| confluent-kafka | Comunicación con Kafka |
+| pandas | Procesamiento de datos |
+| matplotlib | Generación de gráficas |
+| yfinance | Obtención de datos históricos para pruebas |
+| ib_async==2.1.0 | Comunicación con la API de Interactive Brokers |
 
-## 8. Qué sigue
+La versión de ib_async quedó fijada a la utilizada durante las pruebas del 24 de noviembre.
 
-El siguiente paso es **implementar un job de Spark Structured Streaming** que lea JSON de `ticks`, agrupe por minuto según el tiempo del evento, calcule OHLC y publique cada vela terminada en `velas`. Después se desarrollarán las señales, el ejecutor paper y la integración con IBKR cuando la verificación de la cuenta lo permita.
+Las demás dependencias todavía no tienen versiones fijadas, por lo que la reproducibilidad completa del entorno permanece pendiente.
 
-El plan detallado, las tareas y los criterios de terminación están en [MAPA_DE_TRABAJO.md](docs/MAPA_DE_TRABAJO.md).
+### 5.4. ¿Qué necesita cada componente?
 
-## 9. Fuentes del proyecto
+| Actividad | Python | TWS | Kafka | Spark |
+|---|---|---|---|---|
+| Pruebas de estrategia | Sí | No | No | No |
+| Backtesting con datos disponibles | Sí | No | No | No |
+| Conexión API IBKR | Sí | Sí | No | No |
+| Productor ficticio | Sí | No | Sí | No |
+| Productor IBKR | Sí | Sí | Sí | No |
+| Construcción de velas | Sí | No directamente | Sí | Sí |
+| Estrategia conectada a Kafka | Sí | No directamente | Sí | No directamente |
 
-Material proporcionado por el profesor:
+Docker es un mecanismo para ejecutar la infraestructura Kafka y Spark, no un requisito de la API de Interactive Brokers.
 
-- `Indicaciones proyecto.txt` — requisitos obligatorios y esquemas de mensajes.
-- `Introducción al Trading Algoritmico - Google Slides.pdf` — conceptos de trading, FOREX, velas OHLC, indicadores, riesgo y costos.
-- `pseudocodigo-trading.pdf` — estrategia base SMA 10/50 y reglas de salida.
+---
 
-Documentación externa de referencia: [API TWS de Interactive Brokers](https://interactivebrokers.github.io/tws-api/), [Apache Kafka](https://kafka.apache.org/documentation/) y [Spark Structured Streaming](https://spark.apache.org/docs/latest/streaming/index.html).
+## 6. Conexión con Interactive Brokers
 
-> **Trabajo en equipo:** una persona ejecuta y comparte pantalla; cinco integrantes verifican, preguntan, registran decisiones y guardan evidencias. El objetivo es que cualquiera de los seis pueda explicar cada componente.
+### 6.1. Descarga de Trader Workstation
+
+Página oficial:
+
+https://www.interactivebrokers.com/es/trading/download-tws.php?menu=A
+
+Seleccionar la versión estable para el sistema operativo correspondiente.
+
+Instalar TWS fuera del repositorio del proyecto.
+
+### 6.2. Configuración utilizada
+
+| Parámetro | Valor |
+|---|---|
+| Modalidad de sesión | Paper Trading |
+| Host | 127.0.0.1 |
+| Puerto | 7497 |
+| Cliente API | ib_async |
+| Versión | 2.1.0 |
+| API solo lectura | Activada |
+| Conexiones | Solo localhost |
+| Instrumento | EURUSD |
+
+### 6.3. Prueba rápida de conexión
+
+Con TWS abierto, la sesión Paper Trading activa y el entorno virtual preparado:
+
+```bash
+python -c "from ib_async import IB; ib = IB(); ib.connect('127.0.0.1', 7497, clientId=1, readonly=True, timeout=10); print('API IBKR conectada:', ib.isConnected()); ib.disconnect()"
+```
+
+Resultado esperado:
+
+```text
+API IBKR conectada: True
+```
+
+Este comando no solicita cotizaciones ni envía órdenes.
+
+Para reproducir todas las pruebas, consultar la [documentación completa de integración API](docs/INTEGRACION_API_IBKR.md).
+
+### 6.4. Productores disponibles
+
+- `src/productor_ticks.py`: genera cotizaciones ficticias.
+- `src/productor_ibkr.py`: prepara cotizaciones recibidas mediante IBKR para publicarlas en Kafka.
+
+El nuevo productor conserva el formato de mensajes establecido por el profesor.
+
+No deben mezclarse datos ficticios y datos de mercado en las pruebas integradas sin mecanismos de aislamiento.
+
+La ejecución completa del productor IBKR todavía no ha sido validada.
+
+---
+
+## 7. Formatos oficiales de eventos
+
+Los nombres de los campos y tópicos corresponden a las indicaciones del profesor.
+
+Los valores siguientes son ejemplos ficticios.
+
+### Tópico ticks
+
+```json
+{
+    "symbol": "EURUSD",
+    "bid": 1.0850,
+    "ask": 1.0852,
+    "timestamp": "2026-11-21T17:51:18Z"
+}
+```
+
+### Tópico velas
+
+```json
+{
+    "symbol": "EURUSD",
+    "inicio": "2026-11-21T17:51:00Z",
+    "open": 1.0851,
+    "high": 1.0855,
+    "low": 1.0851,
+    "close": 1.0855,
+    "num_ticks": 5
+}
+```
+
+### Tópico signals
+
+```json
+{
+    "id_algoritmo": "SMA_10_50",
+    "symbol": "EURUSD",
+    "signal": "BUY",
+    "precio_referencia": 1.0855,
+    "timestamp": "2026-11-21T17:52:00Z"
+}
+```
+
+### Decisiones técnicas pendientes
+
+- Confirmar si Spark construirá las velas utilizando MID, BID o ASK.
+- Definir la gestión de eventos tardíos y duplicados.
+- Diferenciar el tiempo de origen de una cotización y su tiempo de recepción.
+- Revisar el filtrado de cotizaciones idénticas del productor IBKR y su efecto sobre num_ticks.
+
+El precio medio propuesto es:
+
+    mid = (bid + ask) / 2
+
+El productor IBKR utiliza actualmente una marca temporal de procesamiento en UTC. No debe interpretarse automáticamente como la hora original del evento de mercado.
+
+---
+
+## 8. Estrategia SMA 10/50
+
+La estrategia se basa en el pseudocódigo Trading_Cruce_Medias_Moviles entregado por el profesor.
+
+### 8.1. Reglas implementadas
+
+- SMA corta: promedio de los últimos 10 cierres.
+- SMA larga: promedio de los últimos 50 cierres.
+- Esperar hasta disponer de 50 velas.
+- BUY: SMA corta mayor que SMA larga, sin posición abierta.
+- SELL: Stop Loss, Take Profit o SMA corta menor que SMA larga.
+- Stop Loss: variación adversa del precio del 2 %.
+- Take Profit: variación favorable del precio del 4 %.
+
+Según la documentación de la estrategia, SELL significa cerrar una posición de compra, no abrir una posición corta.
+
+Esta interpretación deberá confirmarse al implementar el ejecutor.
+
+### 8.2. Consideraciones técnicas
+
+Comparar SMA corta y SMA larga no equivale necesariamente a detectar el instante exacto de un cruce.
+
+El backtesting incorpora una opción para evaluar exclusivamente el cruce.
+
+El Stop Loss del 2 % representa una variación del precio, no necesariamente un riesgo del 2 % sobre el capital total de la cuenta.
+
+Los parámetros definitivos de tamaño de posición y riesgo monetario permanecen pendientes de acuerdo.
+
+### 8.3. Pruebas automatizadas
+
+Comando documentado:
+
+```bash
+python -m unittest discover tests -v
+```
+
+La guía de estrategia registra diez pruebas automáticas.
+
+---
+
+## 9. Backtesting
+
+El backtesting permite evaluar la lógica de la estrategia sin enviar órdenes.
+
+### 9.1. Ejecución con datos sintéticos
+
+```bash
+python src/generar_velas_prueba.py
+python src/backtesting.py --datos datos_prueba/velas_sinteticas.csv
+```
+
+### 9.2. Resultados documentados
+
+Prueba con 2000 velas sintéticas y semilla 42:
+
+| Métrica | Resultado |
+|---|---:|
+| Operaciones | 28 |
+| Operaciones ganadoras | 17.9 % |
+| Pips totales | -34.4 |
+| Costo por spread | 28 pips |
+| Comprar y mantener | -62.2 pips |
+
+Estos resultados fueron documentados por Laura M. Sánchez Martínez.
+
+No demuestran que la estrategia sea rentable o no rentable en condiciones reales.
+
+### 9.3. Supuestos y limitaciones
+
+- Ejecución al cierre de la vela que genera la señal.
+- Spread de un pip por defecto.
+- No se incluyen comisiones ni swaps.
+- Capital fijo de 1000 USD por operación.
+- Los datos históricos de Yahoo Finance son aproximados y no contienen BID y ASK.
+- No se ha validado todavía la equivalencia entre la simulación y la ejecución mediante IBKR.
+
+Consultar la [guía de estrategia y backtesting](docs/docs/GUIA_ESTRATEGIA_Y_BACKTESTING.md) para conocer el procedimiento completo.
+
+---
+
+## 10. Próximos pasos
+
+| Paso | Actividad | Estado |
+|---|---|---|
+| 15 | Construir velas OHLC mediante Spark | Pendiente |
+| 16 | Generar datos de prueba reproducibles | Generador de velas implementado; validación OHLC pendiente |
+| 17 | Implementar estrategia SMA 10/50 | Implementada; integración pendiente |
+| 18 | Desarrollar ejecutor y gestión de riesgo | Pendiente |
+| 19 | Integrar Interactive Brokers | Conexión API verificada; publicación Kafka y órdenes paper pendientes |
+| 20 | Realizar pruebas integradas y resistencia a fallos | Pendiente |
+| 21 | Desarrollar backtesting | Implementado y documentado |
+| 22 | Documentación y exposición final | En progreso |
+
+Se conserva la numeración del mapa de trabajo original.
+
+Las prioridades técnicas son:
+
+1. Verificar la publicación de cotizaciones IBKR en Kafka.
+2. Implementar y validar la construcción de velas OHLC de un minuto.
+3. Conectar las velas con la estrategia SMA.
+4. Verificar la publicación de señales.
+5. Desarrollar el ejecutor y sus controles de riesgo.
+6. Validar el recorrido completo de los datos.
+7. Reproducir las pruebas en las condiciones acordadas por el equipo.
+
+El plan detallado y los criterios de aceptación se encuentran en:
+
+[MAPA_DE_TRABAJO.md](docs/docs/MAPA_DE_TRABAJO.md)
+
+---
+
+## 11. Seguridad y buenas prácticas
+
+- Utilizar exclusivamente cuentas Paper Trading.
+- Mantener la API en modo de solo lectura durante las pruebas de cotizaciones.
+- Restringir las conexiones API a localhost.
+- No publicar credenciales ni números de cuenta.
+- No exponer puertos de TWS a Internet.
+- No incluir entornos virtuales en GitHub.
+- No contratar servicios de datos sin autorización.
+- No mezclar cotizaciones ficticias y de mercado sin controles.
+- Verificar las condiciones de uso antes de redistribuir datos financieros.
+- No enviar órdenes sin validar previamente los controles de riesgo.
+- Documentar errores, resultados y limitaciones.
+- Diferenciar pruebas sintácticas, funcionales y de integración.
+
+---
+
+## 12. Metodología de trabajo y aprendizaje
+
+El objetivo del equipo no es únicamente conseguir que el código funcione, sino comprender cómo funciona cada componente.
+
+Cada avance deberá responder:
+
+| Pregunta | Información requerida |
+|---|---|
+| ¿Qué hicimos? | Actividad o componente desarrollado. |
+| ¿Cómo lo hicimos? | Comandos, configuraciones y código. |
+| ¿Dónde lo hicimos? | Entorno, aplicación, archivo o directorio. |
+| ¿Por qué lo hicimos? | Justificación técnica y relación con los requisitos. |
+| ¿Cómo lo comprobamos? | Resultados, evidencias y criterios de aceptación. |
+| ¿Qué falta? | Limitaciones, decisiones pendientes y pruebas no realizadas. |
+
+Los seis integrantes deben poder explicar el funcionamiento general del sistema y reproducir las pruebas correspondientes a cada componente.
+
+Se conserva la dinámica de ejecución compartida y revisión colectiva, complementada con pruebas individuales cuando sea necesario.
+
+---
+
+## 13. Fuentes del proyecto
+
+### Material proporcionado por el profesor
+
+- Indicaciones proyecto.txt.
+- Introducción al Trading Algoritmico - Google Slides.pdf.
+- pseudocodigo-trading.pdf.
+
+### Documentación técnica externa
+
+- Interactive Brokers TWS API:
+  https://interactivebrokers.github.io/tws-api/
+
+- Descarga de Trader Workstation:
+  https://www.interactivebrokers.com/es/trading/download-tws.php?menu=A
+
+- ib_async:
+  https://github.com/ib-api-reloaded/ib_async
+
+- Python:
+  https://docs.python.org/3/
+
+- Apache Kafka:
+  https://kafka.apache.org/documentation/
+
+- Apache Spark Structured Streaming:
+  https://spark.apache.org/docs/latest/streaming/index.html
+
+---
+
+## 14. Historial de avances documentados
+
+| Fecha | Avance |
+|---|---|
+| 21/11/2026 | Infraestructura Kafka y Spark, productor ficticio y lectura de once mensajes. |
+| Incorporado al repositorio antes del corte del 24/11/2026 | Estrategia SMA, pruebas automatizadas y backtesting desarrollados por Laura M. Sánchez Martínez. |
+| 24/11/2026 | Instalación y configuración de TWS, conexión API, recepción de cotizaciones EURUSD y desarrollo preliminar del productor IBKR. |
+
+**Principio del proyecto:** comprender, implementar, comprobar y documentar antes de declarar terminado un componente.

@@ -1,13 +1,25 @@
-from ib_async import *
+
+from ib_async import IB
 
 ib = IB()
 
-ib.connect('127.0.0.1', 7497, clientId=0)
+try:
+    ib.connect("127.0.0.1", 7497, clientId=11, timeout=10)
 
-print("Connected to IB")
-print("ib.accountValues()")
+    print("Conectado a IB:", ib.isConnected())
 
-ib.disconnect()
+    cuentas = ib.managedAccounts()
+    print("Cantidad de cuentas:", len(cuentas))
+    print("Cuenta paper identificada:",
+          any(cuenta.startswith("DU") for cuenta in cuentas))
+
+    valores = ib.accountValues()
+    print("Valores de cuenta recibidos:", len(valores))
+
+finally:
+    ib.disconnect()
+    print("Conexión cerrada")
+
 
 """"
 Output:
