@@ -1,5 +1,5 @@
-# Dependencias directas del proyecto.
-# Versiones verificadas localmente el 26/11/2026.
+# Dependencias directas Python verificadas el 26/11/2026.
+# Kafka y Spark se ejecutan en Docker; no instalar pyspark localmente.
 confluent-kafka==2.16.2
 pandas==3.1.1
 matplotlib==3.11.2

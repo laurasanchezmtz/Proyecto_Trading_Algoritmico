@@ -1,7 +1,7 @@
 # Requerimientos técnicos y entorno de desarrollo
 
 **Fecha del corte:** 26/11/2026
-**Versión documental:** 1.2
+**Versión documental:** 1.3
 **Entornos:** equipo inicial Windows 11 con aproximadamente 8 GB RAM para Kafka/Spark y equipo independiente Windows para pruebas IBKR.
 **Objetivo:** indicar qué se necesita, qué funciona hoy y cómo repetir las pruebas existentes.
 
@@ -241,7 +241,7 @@ mediante pathlib, incluido en Python.
 ## 9. Pendientes técnicos antes de integrar todo
 
 1. Validar la configuración definitiva de red Kafka/Spark.
-2. Resolver persistencia de dependencias y checkpoints de Spark.
+2. Validar recuperación del checkpoint ya montado y resolver persistencia de dependencias de Spark.
 3. Validar ventanas OHLC, eventos tardíos y duplicados.
 4. Verificar publicación y consumo integrado de ticks, velas y signals.
 5. Sincronizar estrategia, posición lógica y posiciones reales del entorno Paper.
@@ -267,3 +267,20 @@ del mapa de trabajo, manteniendo la API en solo lectura.
 
 Consultar:
 [Mapa de trabajo](MAPA_DE_TRABAJO.md).
+
+
+## 11. Segundo entorno verificado — 26/11/2026
+
+| Recurso | Valor |
+|---|---|
+| Docker Desktop | 4.100.1 |
+| WSL | 3.0.5 |
+| Docker Engine / CLI | 29.9.3 |
+| Compose | 5.7.1 (no utilizado) |
+| Recursos Docker | 16 CPU; 6.695 GiB RAM |
+| Kafka | apache/kafka:4.4.0; kafka-trading; 127.0.0.1:9092 |
+| Spark | 4.2.1; Scala 2.13.18; Java 17.0.20.1 |
+| Entorno Python | venv; cinco dependencias directas verificadas; pip check correcto |
+| Checkpoint | .checkpoints/velas en host; /checkpoint/velas en Spark |
+
+Git Bash requiere MSYS_NO_PATHCONV=1 para rutas Linux y pwd -W para montajes Windows. El productor ficticio utiliza IPv4 explícita y broker.address.family=v4; diez mensajes confirmados. La configuración de los otros clientes Kafka no fue modificada ni validada en esta sesión. No se requiere PySpark local. Inicio OHLC comprobado, salida y recuperación pendientes. Consultar sección G de la guía de instalación.

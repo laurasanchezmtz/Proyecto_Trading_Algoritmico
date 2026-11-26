@@ -5,7 +5,7 @@
 **Programa:** Licenciatura en Inteligencia Artificial y Ciencia de Datos
 **Equipo:** 6 estudiantes
 **Corte:** 26/11/2026
-**Versión documental:** 1.2
+**Versión documental:** 1.3
 **Fase actual:** Desarrollo e integración de componentes.
 
 ## 1. Objetivo del mapa de trabajo
@@ -186,13 +186,29 @@ El procedimiento completo se encuentra en:
 
 ---
 
+### 3.6. Reproducción de infraestructura en segundo entorno — 26/11/2026
+
+| Actividad | Evidencia |
+|---|---|
+| Docker y WSL | Client y Server 29.9.3; 16 CPU, 6.695 GiB Docker |
+| Kafka 4.4.0 | Contenedor kafka-trading, puerto 127.0.0.1:9092, tres tópicos principales |
+| Dependencias | Cinco versiones coincidentes; pip check sin incompatibilidades |
+| Spark 4.2.1 | Lectura de cinco ticks ficticios en Batch 0 |
+| Streaming OHLC | Mensaje Streaming iniciado: ticks -> velas |
+| Checkpoints | .checkpoints/velas creado y montado en /checkpoint; recuperación no probada |
+| Incidencia IPv6 | localhost resolvió ::1; conexión TCP y metadatos IPv4 comprobados |
+| Corrección | productor_ticks.py usa 127.0.0.1 y broker.address.family v4 |
+| Recepción | Consumidor confirmó diez ticks, incluidos cinco nuevos entre 20:21:35 y 20:21:39 UTC |
+
+No se comprobó la salida OHLC ni el consumo integrado de señales. La prueba del ejecutor anterior conserva su alcance original. No se enviaron órdenes.
+
 ## 4. Estado consolidado de actividades
 
 Se conserva la numeración original del mapa de trabajo.
 
 | Paso | Actividad | Estado |
 |---|---|---|
-| 1-13 | Infraestructura y lectura inicial de Kafka con Spark | Verificado previamente |
+| 1-13 | Infraestructura y lectura inicial de Kafka con Spark | Reproducido en segundo entorno el 26/11/2026 |
 | 15 | Generación de velas OHLC | Implementado; validación integral pendiente |
 | 16 | Generación de datos de prueba | Generadores implementados; validación pendiente |
 | 17 | Estrategia SMA 10/50 | Implementada; conexión por tópicos principales |
@@ -214,7 +230,7 @@ No se modifica dicha numeración para mantener la trazabilidad histórica.
 
 **Carácter:** Obligatorio.
 
-**Estado:** Implementado; validación integral pendiente.
+**Estado:** Implementado; inicio del streaming verificado; publicación y exactitud OHLC pendientes.
 
 **Qué debemos hacer:**
 
@@ -859,9 +875,9 @@ La exposición final deberá distinguir entre funcionalidades implementadas, pru
 
 | Decisión | Situación |
 |---|---|
-| Precio para OHLC | MID propuesto; confirmar BID, ASK o MID |
+| Precio para OHLC | MID implementado; confirmación del equipo pendiente |
 | Timestamp | UTC ISO 8601; distinguir origen y recepción |
-| Eventos tardíos | Definir política de procesamiento |
+| Eventos tardíos | Watermark de 10 segundos implementado; validar política y resultados |
 | Duplicados | Definir tratamiento en productor, Spark y ejecutor |
 | num_ticks | Revisar efecto del filtrado de cotizaciones idénticas |
 | Comparación de medias o cruce exacto | Mantener lógica original hasta acuerdo del equipo |
@@ -872,7 +888,7 @@ La exposición final deberá distinguir entre funcionalidades implementadas, pru
 | Datos sintéticos y de mercado | Definir mecanismos de aislamiento |
 | Red Docker | Revisar configuración definitiva |
 | Computadora ejecutora | Definir entorno de integración completa |
-| Dependencias Python | Versiones directas fijadas; reproducibilidad en otros equipos pendiente |
+| Dependencias Python | Cinco versiones directas verificadas en segundo entorno; compatibilidad general pendiente |
 | Reconexiones | Bloqueo ante desconexión comprobado; recuperación pendiente |
 | Permisos de datos IBKR | Verificar disponibilidad en otras cuentas |
 | Entrega académica | Confirmar formato final solicitado por el profesor |
@@ -1075,9 +1091,15 @@ La existencia de código fuente no equivale automáticamente al cumplimiento de 
 | 1.0 | 21/11/2026 | Arquitectura inicial, infraestructura, mapa de actividades y criterios de aceptación |
 | 1.1 | 24/11/2026 | Incorporación de avances SMA, backtesting, conexión IBKR, productor preliminar y actualización de pendientes |
 | 1.2 | 26/11/2026 | Consolidación del ejecutor, cálculo de riesgo monetario, seguridad IBKR Paper, pruebas locales y actualización de pendientes |
+| 1.3 | 26/11/2026 | Segundo entorno Docker, corrección IPv4 validada, inicio OHLC y montaje de checkpoints; salida OHLC pendiente |
 
 ---
 
 **Principio de trabajo:** comprender, implementar, comprobar y documentar.
 
 **Restricción permanente:** ninguna operación del proyecto deberá realizarse con dinero real.
+
+
+### Cierre de sesión 26/11/2026 (versión 1.3)
+
+Retomar paso 15: comprobar generación y publicación de velas con datos controlados, avance del watermark y recuperación del checkpoint. En paralelo se mantiene el pendiente 18.9 del ejecutor. Antes de integrar IBKR, aislar datos ficticios y verificar individualmente la conectividad de los demás clientes Kafka. Commit y push de este corte pendientes de confirmación en Git.

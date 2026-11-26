@@ -43,8 +43,14 @@ El orden importa: Spark, el ejecutor y la estrategia deben estar escuchando **an
 
 ### Terminal 1: Spark (ticks → velas)
 
+Crear primero el checkpoint persistente desde la raíz (PowerShell):
+
 ```powershell
-docker run --rm --network container:kafka-trading --memory=1792m --cpus=2 -e HOME=/tmp -v "${PWD}\src:/app:ro" --entrypoint /opt/spark/bin/spark-submit apache/spark:4.2.1-scala2.13-java17-python3-ubuntu --master "local[1]" --driver-memory 768m --conf spark.ui.enabled=false --conf spark.jars.ivy=/tmp/spark-ivy --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.2.1 /app/publicar_velas_spark.py
+New-Item -ItemType Directory -Force .checkpoints/velas
+```
+
+```powershell
+docker run --rm --network container:kafka-trading --memory=1792m --cpus=2 -e HOME=/tmp -v "${PWD}\src:/app:ro" -v "${PWD}\.checkpoints:/checkpoint" --entrypoint /opt/spark/bin/spark-submit apache/spark:4.2.1-scala2.13-java17-python3-ubuntu --master "local[1]" --driver-memory 768m --conf spark.ui.enabled=false --conf spark.jars.ivy=/tmp/spark-ivy --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.2.1 /app/publicar_velas_spark.py
 ```
 
 ✅ Esperar el mensaje `Streaming iniciado: ticks -> velas` (puede tardar 1–2 minutos la primera vez).
@@ -172,3 +178,13 @@ Guardar las capturas en `docs/evidencias/` con nombres como `E1_productor_ibkr.p
 | La estrategia publica, pero el ejecutor dice `Señal antigua o futura` | Retraso mayor a 120 s o reloj de la computadora desajustado | Sincronizar la hora de Windows; no usar velas viejas |
 | `[RECHAZADA] Ya existe una posición` en el primer BUY | Estado SQLite de una prueba anterior | Aplicar la nota 0.8 y reiniciar el ejecutor |
 | Error de memoria de Docker | 8 GB de RAM con TWS + Kafka + Spark | Cerrar navegador y apps; no abrir más terminales Spark |
+
+
+## 7. Variante Git Bash y condiciones previas (26/11/2026)
+
+```bash
+mkdir -p .checkpoints/velas
+MSYS_NO_PATHCONV=1 docker run --rm --network container:kafka-trading --memory=1792m --cpus=2 -e HOME=/tmp -v "$(pwd -W)/src:/app:ro" -v "$(pwd -W)/.checkpoints:/checkpoint" --entrypoint /opt/spark/bin/spark-submit apache/spark:4.2.1-scala2.13-java17-python3-ubuntu --master "local[1]" --driver-memory 768m --conf spark.ui.enabled=false --conf spark.jars.ivy=/tmp/spark-ivy --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.2.1 /app/publicar_velas_spark.py
+```
+
+En Git Bash anteponer MSYS_NO_PATHCONV=1 a los comandos docker exec con rutas Linux. Activar el entorno existente con source venv/Scripts/activate (o .venv según el equipo). El inicio de Spark fue comprobado; aún no se verificó la publicación OHLC. Antes de la sesión integral, validar paso 15 con datos ficticios, recuperación del checkpoint, aislamiento de datos de mercado y conectividad IPv4 de cada cliente. El productor ficticio ya fue corregido y validado; no asumir que los otros clientes lo están. Conservar API Paper en solo lectura y ejecutor Dry Run. Los tiempos del guion son estimaciones, no resultados observados.

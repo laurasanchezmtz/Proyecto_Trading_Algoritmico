@@ -3,8 +3,12 @@ import time
 from datetime import datetime, timezone
 from confluent_kafka import Producer
 
+
 # Conectar Python con Kafka
-productor = Producer({"bootstrap.servers": "localhost:9092"})
+productor = Producer({
+    "bootstrap.servers": "127.0.0.1:9092",
+    "broker.address.family": "v4"
+})
 
 # Simular cinco cotizaciones de EURUSD
 for i in range(5):

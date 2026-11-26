@@ -1,7 +1,7 @@
 # Instalación paso a paso para nuevos integrantes (Windows 11)
 
-**Proyecto:** Trading Algorítmico · **Corte:** 21/11/2026 · **Nivel:** desde cero  
-**Objetivo:** preparar una computadora Windows 11 para reproducir **lo que ya funciona**: Python → Kafka (`ticks`) → lectura con Spark. **Todavía no instala una plataforma de trading completa**; velas OHLC, `signals`, ejecutor y conexión IBKR están pendientes.
+**Proyecto:** Trading Algorítmico · **Corte:** 26/11/2026 · **Nivel:** desde cero
+**Objetivo:** preparar una computadora Windows 11 para reproducir **lo que ya funciona**: Python → Kafka (`ticks`) → lectura con Spark. **Todavía no instala una plataforma de trading completa**; la validación integral de OHLC, señales y ejecutor sigue pendiente; la conexión IBKR se verificó por separado.
 
 > **Si solo vas a seguir la sesión con pantalla compartida:** no necesitas instalar estas herramientas. Este documento es para quien vaya a ejecutar el proyecto en su propio equipo.  
 > **Si ya trabajas en la computadora de María:** salta a la [Sección B (continuar con la instalación existente)](#b-continuar-en-la-computadora-que-ya-funciona). No vuelvas a crear contenedores ni descargues imágenes sin necesidad.
@@ -159,7 +159,7 @@ python -m pip show confluent-kafka
 
 Y cuando más adelante se indique `python src/productor_ticks.py`, ejecutar en su lugar ` .\.venv\Scripts\python.exe src/productor_ticks.py ` (sin los espacios que aquí delimitan la explicación).
 
-**Nota de reproducibilidad:** las cinco dependencias directas están fijadas en requirements.txt con las versiones verificadas el 26/11/2026. La compatibilidad en otros equipos permanece pendiente de comprobación.
+**Nota de reproducibilidad:** las cinco dependencias directas están fijadas en requirements.txt con las versiones verificadas el 26/11/2026. Las cinco versiones también se comprobaron en el segundo entorno Docker del 26/11/2026; no se garantiza compatibilidad universal.
 
 ### A8. Descargar e iniciar Kafka
 
@@ -174,7 +174,7 @@ docker pull apache/kafka:4.4.0
 Solo si **no existe** un contenedor llamado `kafka-trading`, crearlo:
 
 ```powershell
-docker run -d --name kafka-trading -p 9092:9092 apache/kafka:4.4.0
+docker run -d --name kafka-trading -p 127.0.0.1:9092:9092 apache/kafka:4.4.0
 ```
 
 Si el contenedor **ya existe** pero está detenido, **no repetir `docker run`**; usar:
@@ -314,7 +314,7 @@ Get-ChildItem .\src
 
 - **Interactive Brokers / TWS:** la cuenta paper fue creada, pero el acceso y la verificación aún estaban pendientes al cierre del 21/11/2026. No hay pasos comprobados de TWS/API para documentar como terminados.
 - **Kafka en Docker Compose:** previsto para una arquitectura posterior; no se usó en las pruebas actuales.
-- **Spark como servicio permanente o velas de un minuto:** pendiente del paso 15; por ahora se ejecuta un lector temporal.
+- **Spark como servicio permanente:** pendiente. El job OHLC está implementado y su inicio fue verificado; falta comprobar sus salidas.
 - **Algoritmo de trading, señales y órdenes:** pendientes. No se manejan fondos ni órdenes reales.
 
 ## E. Fuentes de instalación oficiales
@@ -427,3 +427,84 @@ del control de versiones.
 - La integración funcional con Kafka permanece pendiente.
 - Continuar en el paso 18.9 del mapa de trabajo.
 - No habilitar escritura hasta validar los controles pendientes.
+
+
+## G. Instalación y reproducción en Git Bash (26/11/2026)
+
+Segundo entorno verificado: Windows, Docker Desktop 4.100.1, WSL 3.0.5, Docker Engine 29.9.3, Compose 5.7.1 (sin utilizar), 16 CPU y 6.695 GiB disponibles para Docker. No se comprobó aquí la versión exacta de Python.
+
+Desde la raíz del repositorio, activar el entorno existente (en este equipo se llama `venv`; si se llama `.venv`, adaptar la ruta):
+
+```bash
+source venv/Scripts/activate
+python -m pip install -r requirements.txt
+python -m pip check
+python -m pip show confluent-kafka pandas matplotlib yfinance ib_async
+docker info
+```
+
+Las cinco versiones directas coincidieron con requirements.txt y pip check no detectó incompatibilidades. No instalar Java ni PySpark en Windows.
+
+### G1. Kafka
+
+```bash
+docker pull apache/kafka:4.4.0
+docker ps -a
+```
+
+Solo si no existe el contenedor, crearlo con acceso local IPv4:
+
+```bash
+docker run -d --name kafka-trading -p 127.0.0.1:9092:9092 apache/kafka:4.4.0
+```
+
+Si ya existe y está detenido, usar `docker start kafka-trading`. En esta sesión se renombró el contenedor inicial mediante `docker rename kafka kafka-trading`; no repetir si ya tiene el nombre correcto.
+
+Git Bash convierte rutas Linux automáticamente; anteponer `MSYS_NO_PATHCONV=1` a los comandos Docker que contienen dichas rutas.
+
+```bash
+MSYS_NO_PATHCONV=1 docker exec kafka-trading /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic ticks --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+MSYS_NO_PATHCONV=1 docker exec kafka-trading /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic velas --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+MSYS_NO_PATHCONV=1 docker exec kafka-trading /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic signals --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+MSYS_NO_PATHCONV=1 docker exec kafka-trading /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server localhost:9092
+```
+
+### G2. Productor ficticio y corrección IPv4
+
+El productor falló al resolver localhost como ::1. Se comprobó TCP IPv4 y la consulta de metadatos Kafka; se modificó únicamente la configuración funcional de `src/productor_ticks.py`:
+
+```python
+productor = Producer({
+    "bootstrap.servers": "127.0.0.1:9092",
+    "broker.address.family": "v4"
+})
+```
+
+```bash
+python src/productor_ticks.py
+MSYS_NO_PATHCONV=1 docker exec kafka-trading /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic ticks --from-beginning --max-messages 10 --timeout-ms 10000
+```
+
+Se verificaron diez mensajes: cinco anteriores y cinco posteriores a la corrección (20:21:35–20:21:39 UTC). En una instalación nueva con una sola ejecución se esperan cinco; ajustar el límite. `flush` sin pendientes no prueba por sí solo la entrega; comprobar el consumidor. Los demás clientes Kafka aún deben validarse individualmente.
+
+### G3. Spark: lectura y streaming
+
+```bash
+docker pull apache/spark:4.2.1-scala2.13-java17-python3-ubuntu
+MSYS_NO_PATHCONV=1 docker run --rm --entrypoint /opt/spark/bin/spark-submit apache/spark:4.2.1-scala2.13-java17-python3-ubuntu --version
+MSYS_NO_PATHCONV=1 docker run --rm --network container:kafka-trading --memory=1792m --cpus=2 -e HOME=/tmp -v "$(pwd -W)/src:/app:ro" --entrypoint /opt/spark/bin/spark-submit apache/spark:4.2.1-scala2.13-java17-python3-ubuntu --master "local[1]" --driver-memory 768m --conf spark.ui.enabled=false --conf spark.jars.ivy=/tmp/spark-ivy --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.2.1 /app/leer_ticks_spark.py
+```
+
+Se verificó Spark 4.2.1, Scala 2.13.18, Java 17.0.20.1 y lectura de cinco ticks. El import directo de pyspark mediante python3 sin configurar rutas falló; el lanzador oficial de PySpark sí respondió. No reinstalar por ese motivo.
+
+Para iniciar el job OHLC, crear el directorio persistente (ya excluido por .gitignore):
+
+```bash
+mkdir -p .checkpoints/velas
+git check-ignore .checkpoints/velas
+MSYS_NO_PATHCONV=1 docker run --rm --network container:kafka-trading --memory=1792m --cpus=2 -e HOME=/tmp -v "$(pwd -W)/src:/app:ro" -v "$(pwd -W)/.checkpoints:/checkpoint" --entrypoint /opt/spark/bin/spark-submit apache/spark:4.2.1-scala2.13-java17-python3-ubuntu --master "local[1]" --driver-memory 768m --conf spark.ui.enabled=false --conf spark.jars.ivy=/tmp/spark-ivy --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.2.1 /app/publicar_velas_spark.py
+```
+
+`pwd -W` obtiene la ruta Windows; `:ro` protege src; el segundo montaje conserva el checkpoint en el host. Esperar `Streaming iniciado: ticks -> velas`. En otra terminal activar el entorno y generar nuevos ticks. El job usa latest al iniciar sin checkpoint, ventanas de un minuto, MID y watermark de 10 segundos; necesita eventos posteriores que permitan cerrar la ventana. No borrar checkpoints ni mezclar datos ficticios y de mercado. Detener con Ctrl+C y conservar el estado.
+
+**Estado del corte:** inicio del job verificado; publicación y exactitud OHLC, recuperación del checkpoint y flujo integral pendientes. Mantener IBKR en Paper, solo lectura y Dry Run.
