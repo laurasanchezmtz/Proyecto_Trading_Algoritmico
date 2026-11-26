@@ -20,3 +20,5 @@ spark-warehouse/
 .checkpoints/
 
 datos_prueba/ejecutor_prueba.sqlite3*
+# Base de datos del ejecutor principal
+datos_prueba/ejecutor.sqlite3*
