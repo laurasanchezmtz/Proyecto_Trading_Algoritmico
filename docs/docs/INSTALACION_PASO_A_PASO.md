@@ -159,7 +159,7 @@ python -m pip show confluent-kafka
 
 Y cuando más adelante se indique `python src/productor_ticks.py`, ejecutar en su lugar ` .\.venv\Scripts\python.exe src/productor_ticks.py ` (sin los espacios que aquí delimitan la explicación).
 
-**Nota de reproducibilidad:** la versión exacta de `confluent-kafka` usada por el ejecutor aún no fue registrada; por eso el `requirements.txt` actual no está fijado a una versión. Antes de declarar la instalación idéntica en todos los equipos, el ejecutor debe compartir el resultado de `python -m pip show confluent-kafka` y el equipo decidir si fija esa versión.
+**Nota de reproducibilidad:** las cinco dependencias directas están fijadas en requirements.txt con las versiones verificadas el 26/11/2026. La compatibilidad en otros equipos permanece pendiente de comprobación.
 
 ### A8. Descargar e iniciar Kafka
 
@@ -326,3 +326,104 @@ Get-ChildItem .\src
 - [Apache Kafka 4.4: Docker](https://kafka.apache.org/44/getting-started/docker/)
 - [Apache Spark 4.2.1: integración con Kafka](https://spark.apache.org/docs/4.2.1/structured-streaming-kafka-integration.html)
 - [Spark 4.2.1: configuración de Ivy](https://spark.apache.org/docs/4.2.1/configuration.html)
+
+---
+
+## F. Configuración del ejecutor de riesgo Dry Run
+
+**Actualización:** 26/11/2026.
+
+### F1. Requisitos
+
+- Entorno virtual de Python activo.
+- Dependencias instaladas desde requirements.txt.
+- Trader Workstation instalado.
+- Sesión Paper Trading activa.
+- API en solo lectura.
+- Puerto 7497 y conexiones únicamente desde localhost.
+- Kafka disponible en localhost:9092 para pruebas integradas.
+
+### F2. Instalación de dependencias
+
+```bash
+python -m pip install -r requirements.txt
+python -m pip check
+```
+
+### F3. Configuración privada de la cuenta Paper
+
+Desde la raíz del repositorio, crear el archivo .env
+si todavía no existe:
+
+```bash
+touch .env
+```
+
+Abrirlo con Visual Studio Code:
+
+```bash
+code .env
+```
+
+Agregar la variable:
+
+```text
+IBKR_PAPER_ACCOUNT=IDENTIFICADOR_DE_CUENTA_PAPER
+```
+
+Sustituir el marcador por el identificador de la cuenta
+Paper autorizada, no por el nombre de usuario.
+
+Verificar que Git ignore el archivo:
+
+```bash
+git check-ignore -v .env
+```
+
+No publicar ni compartir el contenido del archivo .env.
+
+### F4. Validación de sintaxis
+
+```bash
+python -m py_compile src/config_riesgo.py src/calculo_riesgo.py src/seguridad_ibkr.py src/ejecutor_riesgo.py
+```
+
+### F5. Ejecución
+
+Con TWS abierto en Paper Trading y Kafka disponible:
+
+```bash
+python src/ejecutor_riesgo.py
+```
+
+Mensajes esperados al iniciar:
+
+```text
+[SEGURIDAD] Conexion Paper autorizada
+Ejecutor persistente iniciado (DRY-RUN)
+```
+
+Para detener el programa, utilizar Ctrl+C.
+
+### F6. Persistencia
+
+El ejecutor crea automáticamente su base de datos:
+
+```text
+datos_prueba/ejecutor.sqlite3
+```
+
+No requiere instalar SQLite por separado, ya que Python
+incluye el módulo sqlite3.
+
+La base de datos y sus archivos auxiliares están excluidos
+del control de versiones.
+
+### F7. Restricciones y pendientes
+
+- Mantener la API en solo lectura.
+- El ejecutor no envía órdenes.
+- La seguridad de conexión fue verificada localmente.
+- La integración funcional con Kafka permanece pendiente.
+- Continuar en el paso 18.9 del mapa de trabajo.
+- No habilitar escritura hasta validar los controles pendientes.

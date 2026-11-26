@@ -4,8 +4,8 @@
 **Proyecto escolar | Licenciatura en Inteligencia Artificial y Ciencia de Datos**
 
 **Equipo:** 6 estudiantes
-**Corte documentado:** 24 de noviembre de 2026
-**Estado:** En desarrollo e integración de componentes.
+**Corte documentado:** 26 de noviembre de 2026
+**Estado:** Integración de componentes y ejecutor Dry Run implementados parcialmente. Continuar en el paso 18.9 del mapa de trabajo.
 
 > **Aviso:** Este proyecto tiene fines exclusivamente educativos. Se ha verificado la recepción de cotizaciones de EURUSD mediante Interactive Brokers en una sesión Paper Trading. No se han enviado órdenes. Todas las operaciones futuras deberán realizarse exclusivamente en una cuenta simulada, nunca con dinero real.
 
@@ -44,7 +44,7 @@ flowchart TD
     G --> H["Estrategia SMA 10/50"]
     H --> I["Kafka: signals"]
     I --> J["Ejecutor y controles de riesgo"]
-    J --> K["Ordenes simuladas en IBKR"]
+    J -.->|"Pendiente de validacion"| K["Ordenes simuladas en IBKR"]
     L["Datos historicos o sinteticos"] --> M["Backtesting"]
     H -.->|"Logica reutilizable"| M
 ```
@@ -163,13 +163,13 @@ Consultar:
 
 | Actividad | Estado |
 |---|---|
-| Conversión de ticks a velas OHLC de un minuto | Pendiente |
-| Publicación de velas terminadas en Kafka | Pendiente |
+| Conversión de ticks a velas OHLC de un minuto | Implementada; validación integral pendiente |
+| Publicación de velas terminadas en Kafka | Implementada; validación integral pendiente |
 | Integración de productor IBKR con Kafka | Pendiente de prueba |
-| Integración Spark con estrategia SMA | Pendiente |
+| Integración Spark con estrategia SMA | Tópicos compatibles; validación integral pendiente |
 | Publicación integrada de señales BUY/SELL | Pendiente de validación |
-| Ejecutor con controles de riesgo | Pendiente |
-| Pruebas de extremo a extremo | Pendientes |
+| Ejecutor con controles de riesgo | Dry Run implementado; seguridad local verificada |
+| Pruebas de extremo a extremo | Pruebas parciales realizadas; validación completa pendiente |
 | Documentación final y exposición | En progreso |
 
 No debe confundirse el funcionamiento individual de un componente con la validación del sistema completo.
@@ -209,7 +209,12 @@ Proyecto_Trading_Algoritmico/
 │   ├── generar_velas_prueba.py
 │   ├── leer_ticks_spark.py
 │   ├── productor_ticks.py
-│   └── productor_ibkr.py
+│   ├── productor_ibkr.py
+│   ├── publicar_velas_spark.py
+│   ├── ejecutor_riesgo.py
+│   ├── config_riesgo.py
+│   ├── calculo_riesgo.py
+│   └── seguridad_ibkr.py
 ├── tests/
 │   └── test_estrategia_sma.py
 ├── requirements.txt
@@ -273,15 +278,15 @@ python -m pip install -r requirements.txt
 
 | Biblioteca | Función |
 |---|---|
-| confluent-kafka | Comunicación con Kafka |
-| pandas | Procesamiento de datos |
-| matplotlib | Generación de gráficas |
-| yfinance | Obtención de datos históricos para pruebas |
+| confluent-kafka==2.16.2 | Comunicación con Kafka |
+| pandas==3.1.1 | Procesamiento de datos |
+| matplotlib==3.11.2 | Generación de gráficas |
+| yfinance==1.8.0 | Obtención de datos históricos para pruebas |
 | ib_async==2.1.0 | Comunicación con la API de Interactive Brokers |
 
 La versión de ib_async quedó fijada a la utilizada durante las pruebas del 24 de noviembre.
 
-Las demás dependencias todavía no tienen versiones fijadas, por lo que la reproducibilidad completa del entorno permanece pendiente.
+Desde el 26/11/2026, las cinco dependencias directas están fijadas en requirements.txt. La comprobación local mediante pip check fue satisfactoria. La reproducibilidad en otros equipos permanece pendiente.
 
 ### 5.4. ¿Qué necesita cada componente?
 
@@ -294,6 +299,7 @@ Las demás dependencias todavía no tienen versiones fijadas, por lo que la repr
 | Productor IBKR | Sí | Sí | Sí | No |
 | Construcción de velas | Sí | No directamente | Sí | Sí |
 | Estrategia conectada a Kafka | Sí | No directamente | Sí | No directamente |
+| Ejecutor de riesgo Dry Run | Sí | Sí | Sí | No directamente |
 
 Docker es un mecanismo para ejecutar la infraestructura Kafka y Spark, no un requisito de la API de Interactive Brokers.
 
@@ -400,7 +406,7 @@ Los valores siguientes son ejemplos ficticios.
 
 ### Decisiones técnicas pendientes
 
-- Confirmar si Spark construirá las velas utilizando MID, BID o ASK.
+- Validar la construcción de velas mediante MID, implementada en Spark.
 - Definir la gestión de eventos tardíos y duplicados.
 - Diferenciar el tiempo de origen de una cotización y su tiempo de recepción.
 - Revisar el filtrado de cotizaciones idénticas del productor IBKR y su efecto sobre num_ticks.
@@ -429,7 +435,7 @@ La estrategia se basa en el pseudocódigo Trading_Cruce_Medias_Moviles entregado
 
 Según la documentación de la estrategia, SELL significa cerrar una posición de compra, no abrir una posición corta.
 
-Esta interpretación deberá confirmarse al implementar el ejecutor.
+El ejecutor Dry Run implementa esta interpretación y rechaza SELL cuando no existe una posición lógica abierta.
 
 ### 8.2. Consideraciones técnicas
 
@@ -439,7 +445,7 @@ El backtesting incorpora una opción para evaluar exclusivamente el cruce.
 
 El Stop Loss del 2 % representa una variación del precio, no necesariamente un riesgo del 2 % sobre el capital total de la cuenta.
 
-Los parámetros definitivos de tamaño de posición y riesgo monetario permanecen pendientes de acuerdo.
+Para Dry Run se estableció una exposición nominal de 1000 USD por operación y un riesgo teórico máximo de 20 USD. La cantidad se calcula en unidades enteras de EUR. Estos parámetros no garantizan una pérdida máxima efectiva.
 
 ### 8.3. Pruebas automatizadas
 
@@ -497,26 +503,26 @@ Consultar la [guía de estrategia y backtesting](docs/docs/GUIA_ESTRATEGIA_Y_BAC
 
 | Paso | Actividad | Estado |
 |---|---|---|
-| 15 | Construir velas OHLC mediante Spark | Pendiente |
+| 15 | Construir velas OHLC mediante Spark | Implementado; validación integral pendiente |
 | 16 | Generar datos de prueba reproducibles | Generador de velas implementado; validación OHLC pendiente |
-| 17 | Implementar estrategia SMA 10/50 | Implementada; integración pendiente |
-| 18 | Desarrollar ejecutor y gestión de riesgo | Pendiente |
+| 17 | Implementar estrategia SMA 10/50 | Implementada; conexión por tópicos principales |
+| 18 | Desarrollar ejecutor y gestión de riesgo | Parcialmente completado; continuar en 18.9 |
 | 19 | Integrar Interactive Brokers | Conexión API verificada; publicación Kafka y órdenes paper pendientes |
-| 20 | Realizar pruebas integradas y resistencia a fallos | Pendiente |
+| 20 | Realizar pruebas integradas y resistencia a fallos | Pruebas parciales realizadas |
 | 21 | Desarrollar backtesting | Implementado y documentado |
 | 22 | Documentación y exposición final | En progreso |
 
 Se conserva la numeración del mapa de trabajo original.
 
-Las prioridades técnicas son:
+### Prioridades técnicas vigentes
 
-1. Verificar la publicación de cotizaciones IBKR en Kafka.
-2. Implementar y validar la construcción de velas OHLC de un minuto.
-3. Conectar las velas con la estrategia SMA.
-4. Verificar la publicación de señales.
-5. Desarrollar el ejecutor y sus controles de riesgo.
-6. Validar el recorrido completo de los datos.
-7. Reproducir las pruebas en las condiciones acordadas por el equipo.
+1. Paso 18.9: consultar y sincronizar posiciones y órdenes de IBKR.
+2. Paso 18.10: completar los controles de riesgo pendientes.
+3. Paso 18.11: validar el ejecutor Dry Run con Kafka.
+4. Paso 19: completar las pruebas funcionales de integración IBKR.
+5. Paso 19.7: probar órdenes exclusivamente Paper, previa validación de los controles.
+6. Paso 20: validar el recorrido completo y la resistencia a fallos.
+7. Paso 22: finalizar documentación y exposición.
 
 El plan detallado y los criterios de aceptación se encuentran en:
 
@@ -599,5 +605,16 @@ Se conserva la dinámica de ejecución compartida y revisión colectiva, complem
 | 21/11/2026 | Infraestructura Kafka y Spark, productor ficticio y lectura de once mensajes. |
 | Incorporado al repositorio antes del corte del 24/11/2026 | Estrategia SMA, pruebas automatizadas y backtesting desarrollados por Laura M. Sánchez Martínez. |
 | 24/11/2026 | Instalación y configuración de TWS, conexión API, recepción de cotizaciones EURUSD y desarrollo preliminar del productor IBKR. |
+
+| 26/11/2026 | Consolidación del ejecutor Dry Run, cálculo de riesgo monetario, persistencia SQLite, autorización de cuenta Paper, pruebas locales de seguridad y actualización documental. |
+
+### Punto de entrega
+
+- Continuar en el paso 18.9 del mapa de trabajo.
+- Configurar localmente IBKR_PAPER_ACCOUNT en el archivo .env.
+- Mantener TWS en Paper Trading y la API en solo lectura.
+- No compartir el archivo .env ni la base de datos SQLite.
+- Kafka no estuvo disponible durante las pruebas locales de seguridad.
+- No se han enviado órdenes a IBKR.
 
 **Principio del proyecto:** comprender, implementar, comprobar y documentar antes de declarar terminado un componente.

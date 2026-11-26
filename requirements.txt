@@ -1,8 +1,7 @@
-# Dependencia Python usada por el productor de ticks en este corte.
-# Versión exacta local aún no registrada; fijarla después de comprobar pip show.
-confluent-kafka
-pandas
-matplotlib
-yfinance
-
+# Dependencias directas del proyecto.
+# Versiones verificadas localmente el 26/11/2026.
+confluent-kafka==2.16.2
+pandas==3.1.1
+matplotlib==3.11.2
+yfinance==1.8.0
 ib_async==2.1.0

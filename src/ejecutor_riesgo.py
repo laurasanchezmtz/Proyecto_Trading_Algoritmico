@@ -5,6 +5,8 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime, timezone
 from confluent_kafka import Consumer
+from ib_async import IB
+from seguridad_ibkr import verificar_conexion_paper
 from calculo_riesgo import calcular_riesgo
 from config_riesgo import (
     SIMBOLO_PERMITIDO,
@@ -16,6 +18,19 @@ from config_riesgo import (
     VIGENCIA_SENAL_SEGUNDOS,
     TOLERANCIA_FUTURA_SEGUNDOS,
 )
+
+# Conexion segura con IBKR Paper Trading
+ib = IB()
+try:
+    ib.connect("127.0.0.1", 7497, clientId=31,
+               timeout=10, readonly=True)
+    if not verificar_conexion_paper(ib):
+        raise RuntimeError("Cuenta Paper no autorizada")
+except Exception:
+    ib.disconnect()
+    raise SystemExit("[BLOQUEADO] Conexion Paper no autorizada")
+
+print("[SEGURIDAD] Conexion Paper autorizada")
 
 # Base de datos local del proyecto
 ruta_bd = (
@@ -172,6 +187,11 @@ print("Esperando señales... Ctrl + C para salir")
 try:
     while True:
         mensaje = consumidor.poll(1.0)
+        ib.sleep(0)
+        if not verificar_conexion_paper(ib):
+            print("[BLOQUEADO] Conexion Paper perdida o no autorizada")
+            break
+
 
         if mensaje is None:
             continue
@@ -208,3 +228,5 @@ except KeyboardInterrupt:
 finally:
     consumidor.close()
     db.close()
+    ib.disconnect()
+    print("[SEGURIDAD] Conexion IBKR cerrada")

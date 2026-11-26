@@ -4,8 +4,8 @@
 **Proyecto:** Trading Algorítmico
 **Programa:** Licenciatura en Inteligencia Artificial y Ciencia de Datos
 **Equipo:** 6 estudiantes
-**Corte:** 24/11/2026
-**Versión documental:** 1.1
+**Corte:** 26/11/2026
+**Versión documental:** 1.2
 **Fase actual:** Desarrollo e integración de componentes.
 
 ## 1. Objetivo del mapa de trabajo
@@ -193,12 +193,12 @@ Se conserva la numeración original del mapa de trabajo.
 | Paso | Actividad | Estado |
 |---|---|---|
 | 1-13 | Infraestructura y lectura inicial de Kafka con Spark | Verificado previamente |
-| 15 | Generación de velas OHLC | Pendiente |
-| 16 | Generación de datos de prueba | Parcialmente completado |
-| 17 | Estrategia SMA 10/50 | Implementada; integración pendiente |
-| 18 | Ejecutor y gestión de riesgos | Pendiente |
+| 15 | Generación de velas OHLC | Implementado; validación integral pendiente |
+| 16 | Generación de datos de prueba | Generadores implementados; validación pendiente |
+| 17 | Estrategia SMA 10/50 | Implementada; conexión por tópicos principales |
+| 18 | Ejecutor y gestión de riesgos | Parcialmente completado; continuar en 18.9 |
 | 19 | Integración con Interactive Brokers | Parcialmente completado |
-| 20 | Pruebas integradas y resistencia a fallos | Pendiente |
+| 20 | Pruebas integradas y resistencia a fallos | Pruebas parciales realizadas |
 | 21 | Backtesting | Implementado y documentado |
 | 22 | Documentación y exposición | En progreso |
 
@@ -214,7 +214,7 @@ No se modifica dicha numeración para mantener la trazabilidad histórica.
 
 **Carácter:** Obligatorio.
 
-**Estado:** Pendiente.
+**Estado:** Implementado; validación integral pendiente.
 
 **Qué debemos hacer:**
 
@@ -261,7 +261,7 @@ El consumidor de velas recibe objetos JSON con los campos definidos por el profe
 
 **Carácter:** Actividad de soporte.
 
-**Estado:** Parcialmente completado.
+**Estado:** Generadores implementados; validación pendiente.
 
 **Qué se hizo:**
 
@@ -301,7 +301,7 @@ La disponibilidad de velas sintéticas no demuestra que Spark pueda construirlas
 
 **Carácter:** Obligatorio.
 
-**Estado:** Implementada y probada de forma aislada según la documentación de Laura. Integración completa pendiente.
+**Estado:** Implementada y probada de forma aislada según la documentación de Laura. Conexión por tópicos principales implementada; validación integral pendiente.
 
 **Responsable del desarrollo documentado:** Laura M. Sánchez Martínez.
 
@@ -367,7 +367,7 @@ Confirmar que SELL significa cerrar una posición de compra y no abrir una posic
 
 **Carácter:** Obligatorio.
 
-**Estado:** Pendiente.
+**Estado:** Parcialmente completado. Continuar en 18.9.
 
 **Qué debemos hacer:**
 
@@ -410,6 +410,127 @@ Un conjunto de señales válidas e inválidas se acepta o rechaza correctamente,
 **Consideración financiera:**
 
 El Stop Loss del 2 % establecido en el pseudocódigo representa una variación del precio y no equivale necesariamente al 2 % del capital arriesgado.
+
+---
+
+#### Desglose operativo del paso 18 — Corte 26/11/2026
+
+| Subpaso | Actividad | Estado |
+|---|---|---|
+| 18.1 | Consumidor Kafka | Implementado |
+| 18.2 | Validación de señales, símbolo, precio y vigencia | Implementado |
+| 18.3 | Control de duplicados y posición lógica | Implementado |
+| 18.4 | Persistencia mediante SQLite | Implementado |
+| 18.5 | Generadores de señales de prueba | Implementado |
+| 18.6 | Consolidación del ejecutor principal | Completado |
+| 18.7 | Configuración y cálculo del riesgo monetario | Completado dentro del alcance local |
+| 18.8 | Seguridad de conexión IBKR Paper | Validada dentro del alcance local |
+| 18.9 | Consulta y sincronización de posiciones y órdenes IBKR | Pendiente |
+| 18.10 | Controles de riesgo restantes | Pendiente |
+| 18.11 | Validación integral del ejecutor Dry Run | Pendiente |
+| 18.12 | Documentación y cierre del ejecutor | En progreso |
+
+#### Archivos principales
+
+- src/ejecutor_riesgo.py: ejecutor principal en modo Dry Run.
+- src/config_riesgo.py: parámetros de riesgo.
+- src/calculo_riesgo.py: cálculo de exposición y riesgo monetario.
+- src/seguridad_ibkr.py: validación de conexión y cuenta autorizada.
+- datos_prueba/ejecutor.sqlite3: persistencia local excluida de Git.
+- .env: identificador de cuenta Paper autorizada, excluido de Git.
+
+Se conservan los archivos de prueba desarrollados previamente por Edgar.
+
+#### Parámetros de riesgo autorizados para simulación
+
+| Parámetro | Valor |
+|---|---|
+| Instrumento | EURUSD |
+| Exposición nominal máxima por operación | 1000 USD |
+| Riesgo monetario máximo teórico | 20 USD |
+| Stop Loss | 2 % del precio |
+| Take Profit | 4 % del precio |
+| Posiciones lógicas simultáneas | 1 |
+| Vigencia máxima de señal | 120 segundos |
+| Tolerancia temporal futura | 30 segundos |
+| Modalidad | Dry Run |
+| Tópico principal de entrada | signals |
+
+La cantidad se calcula en unidades enteras de EUR.
+El riesgo calculado es teórico y no incluye comisiones,
+spread, deslizamiento ni restricciones de tamaño del broker.
+
+Los niveles Stop Loss y Take Profit se calculan,
+pero todavía no se convierten en órdenes IBKR.
+
+#### Seguridad de conexión
+
+- TWS Paper Trading en 127.0.0.1:7497.
+- Conexión mediante ib_async en modo readonly=True.
+- Identificador de cliente API del ejecutor: 31.
+- Validación de formato de cuentas Paper DU o DUR.
+- Comparación exacta con la cuenta autorizada en .env.
+- Rechazo de cuentas no autorizadas o configuraciones inválidas.
+- Validación antes de iniciar Kafka y SQLite.
+- Comprobación de conexión durante el ciclo de consumo.
+- Bloqueo automático ante desconexión detectada.
+- Cierre de IBKR durante la finalización normal.
+
+El puerto y el prefijo de cuenta no constituyen por sí solos
+una garantía suficiente de que la sesión sea simulada.
+
+#### Evidencias del 26/11/2026
+
+| Prueba | Resultado |
+|---|---|
+| Compilación de los módulos | Aprobada |
+| Cálculo de riesgo con precio 1.09664 | Aprobada |
+| Rechazo de riesgo superior al límite de prueba | Aprobada |
+| Validación de cuenta Paper autorizada | Aprobada |
+| Rechazo de cuentas no autorizadas en el módulo | Aprobada |
+| Inicio del ejecutor con TWS activo | Aprobada |
+| Inicialización de SQLite | Aprobada |
+| Detención manual del ejecutor | Aprobada |
+| Bloqueo automático al cerrar TWS | Aprobada |
+| Inicio con TWS cerrado | Bloqueado correctamente |
+| Consumo efectivo de señales Kafka | No comprobado en este equipo |
+| Envío de órdenes IBKR | No realizado |
+
+Registros observados:
+
+    [SEGURIDAD] Conexion Paper autorizada
+    Ejecutor persistente iniciado (DRY-RUN)
+
+    Peer closed connection.
+    [BLOQUEADO] Conexion Paper perdida o no autorizada
+    [SEGURIDAD] Conexion IBKR cerrada
+
+    [BLOQUEADO] Conexion Paper no autorizada
+
+#### Limitaciones y pendientes técnicos
+
+- Kafka no estuvo disponible en localhost:9092 durante estas pruebas.
+- Falta comprobar el consumo integrado de señales.
+- La posición SQLite es lógica y no representa necesariamente
+  una posición existente en IBKR.
+- Falta sincronizar posiciones, cantidades y órdenes del broker.
+- Falta verificar la recuperación ante errores de persistencia
+  y confirmación de offsets Kafka.
+- Falta comprobar el cierre de recursos ante todas las excepciones.
+- La detección de desconexión no garantiza detectar inmediatamente
+  todas las interrupciones silenciosas de red.
+- No se han habilitado permisos de escritura ni enviado órdenes.
+
+#### Punto de continuación para el siguiente integrante
+
+Retomar el paso 18.9: consulta y sincronización de posiciones
+y órdenes existentes en IBKR, manteniendo la API en solo lectura.
+
+El objetivo es contrastar el estado lógico del ejecutor con
+el estado informado por el broker antes de autorizar operaciones.
+
+No avanzar al paso 19.7 hasta completar y validar los controles
+de riesgo y las pruebas integradas del ejecutor.
 
 ---
 
@@ -568,7 +689,7 @@ El paso completo termina cuando:
 
 **Carácter:** Obligatorio.
 
-**Estado:** Pendiente.
+**Estado:** Pruebas parciales realizadas; validación integral pendiente.
 
 **Qué debemos hacer:**
 
@@ -727,6 +848,12 @@ La exposición final deberá distinguir entre funcionalidades implementadas, pru
 | Crear un productor IBKR separado | Incorporar una nueva fuente sin alterar el productor existente |
 | Separar la estrategia de Kafka | Facilitar reutilización y pruebas |
 | Utilizar Markdown | Mantener documentación versionada junto al código |
+| Consolidar el ejecutor principal | Consumir señales del tópico signals |
+| Utilizar SQLite | Conservar posiciones lógicas y señales aceptadas |
+| Separar parámetros de riesgo | Centralizar configuración en config_riesgo.py |
+| Autorizar una cuenta Paper mediante .env | Restringir el acceso a la cuenta configurada localmente |
+| Mantener el ejecutor en Dry Run | Validar controles sin enviar órdenes |
+| Bloquear ante pérdida de conexión | Evitar procesamiento sin una conexión autorizada |
 
 ### 6.2. Decisiones pendientes
 
@@ -739,14 +866,14 @@ La exposición final deberá distinguir entre funcionalidades implementadas, pru
 | num_ticks | Revisar efecto del filtrado de cotizaciones idénticas |
 | Comparación de medias o cruce exacto | Mantener lógica original hasta acuerdo del equipo |
 | Interpretación de SELL | Confirmar cierre de compra, sin apertura de corto |
-| Estado de posiciones | Sincronizar estrategia y ejecutor |
-| Riesgo por operación | Definir tamaño de posición y riesgo monetario |
+| Estado de posiciones | Persistencia lógica SQLite implementada; sincronización con IBKR pendiente en 18.9 |
+| Riesgo por operación | Definido para Dry Run: exposición máxima de 1000 USD y riesgo teórico de 20 USD; pendiente validación con IBKR |
 | Stop Loss y Take Profit | Revisar parámetros para FOREX sin modificar unilateralmente |
 | Datos sintéticos y de mercado | Definir mecanismos de aislamiento |
 | Red Docker | Revisar configuración definitiva |
 | Computadora ejecutora | Definir entorno de integración completa |
-| Dependencias Python | Fijar versiones restantes para reproducibilidad |
-| Reconexiones | Definir política de recuperación |
+| Dependencias Python | Versiones directas fijadas; reproducibilidad en otros equipos pendiente |
+| Reconexiones | Bloqueo ante desconexión comprobado; recuperación pendiente |
 | Permisos de datos IBKR | Verificar disponibilidad en otras cuentas |
 | Entrega académica | Confirmar formato final solicitado por el profesor |
 
@@ -947,6 +1074,7 @@ La existencia de código fuente no equivale automáticamente al cumplimiento de 
 |---|---|---|
 | 1.0 | 21/11/2026 | Arquitectura inicial, infraestructura, mapa de actividades y criterios de aceptación |
 | 1.1 | 24/11/2026 | Incorporación de avances SMA, backtesting, conexión IBKR, productor preliminar y actualización de pendientes |
+| 1.2 | 26/11/2026 | Consolidación del ejecutor, cálculo de riesgo monetario, seguridad IBKR Paper, pruebas locales y actualización de pendientes |
 
 ---
 

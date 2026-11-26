@@ -1,6 +1,6 @@
 # Estrategia SMA 10/50 y backtesting (pasos 16, 17 y 21)
 
-**Responsable:** Laura M. Sánchez Martínez · **Estado:** código listo y probado con datos ficticios; falta conectarlo al flujo real cuando Spark publique en `velas`.
+**Responsable:** Laura M. Sánchez Martínez · **Estado:** código implementado y probado con datos ficticios. Integración mediante los tópicos velas y signals establecida en código; validación integral pendiente.
 
 ## 1. Qué archivos se agregan
 
@@ -18,7 +18,7 @@
 ## 2. Cómo correrlo (desde la raíz del proyecto, con `.venv` activado)
 
 ```powershell
-python -m pip install pandas matplotlib yfinance
+python -m pip install -r requirements.txt
 
 # 1) Pruebas automáticas: deben salir 10 "ok"
 python -m unittest discover tests -v

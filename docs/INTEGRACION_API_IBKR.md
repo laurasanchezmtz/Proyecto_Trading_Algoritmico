@@ -4,8 +4,9 @@
 **Proyecto:** Trading Algorítmico  
 **Programa académico:** Licenciatura en Inteligencia Artificial y Ciencia de Datos  
 **Fecha de implementación:** 24 de noviembre de 2026  
-**Versión del documento:** 1.0  
-**Estado:** Conexión API y recepción de cotizaciones verificadas.
+**Última actualización:** 26 de noviembre de 2026
+**Versión del documento:** 1.1
+**Estado:** Conexión API, recepción de cotizaciones y controles locales de seguridad del ejecutor Dry Run verificados. Integración completa pendiente.
 
 ---
 
@@ -456,7 +457,20 @@ yfinance
 ib_async==2.1.0
 ```
 
-Se conservaron las demás dependencias sin fijar sus versiones.
+Se conservaron inicialmente las demás dependencias sin fijar sus versiones.
+
+**Actualización del 26/11/2026:** las dependencias directas vigentes son:
+
+- confluent-kafka==2.16.2
+- pandas==3.1.1
+- matplotlib==3.11.2
+- yfinance==1.8.0
+- ib_async==2.1.0
+
+Estas versiones están registradas en requirements.txt.
+La comprobación local mediante pip check no detectó incompatibilidades.
+
+Para nuevas instalaciones, utilizar requirements.txt y no repetir los comandos históricos de incorporación de dependencias.
 
 ### 9.5. Instalación para otros integrantes
 
@@ -1006,3 +1020,58 @@ https://spark.apache.org/docs/latest/streaming/index.html
 | Versión | Fecha | Descripción |
 |---|---|---|
 | 1.0 | 2026-11-24 | Documentación inicial de instalación, configuración, conexión API, recepción de cotizaciones y desarrollo preliminar del productor IBKR. |
+
+| 1.1 | 2026-11-26 | Integracion de controles de seguridad, autorizacion de cuenta Paper y pruebas del ejecutor Dry Run. |
+
+---
+
+## 22. Seguridad del ejecutor Dry Run — 26/11/2026
+
+### 22.1. Componentes implementados
+
+- src/seguridad_ibkr.py: validación de conexión y cuenta autorizada.
+- src/ejecutor_riesgo.py: integración de controles de seguridad.
+- .env: configuración privada de la cuenta Paper autorizada.
+
+### 22.2. Controles implementados
+
+- Conexión local mediante 127.0.0.1:7497.
+- Client ID 31.
+- Conexión mediante readonly=True.
+- Validación de identificadores Paper DU y DUR.
+- Comparación exacta con la cuenta autorizada en .env.
+- Validación previa al inicio de Kafka y SQLite.
+- Comprobación de conexión durante el consumo de señales.
+- Bloqueo ante desconexión detectada.
+- Cierre de conexión durante la finalización normal.
+
+### 22.3. Evidencias de pruebas
+
+| Prueba | Resultado |
+|---|---|
+| Cuenta Paper autorizada | Aprobada |
+| Rechazo de cuenta no autorizada | Aprobada en el módulo de validación |
+| Inicio del ejecutor con TWS activo | Aprobada |
+| Detención mediante Ctrl+C | Aprobada |
+| Cierre de TWS durante la ejecución | Bloqueo correcto |
+| Inicio con TWS cerrado | Bloqueo correcto |
+| Consumo integrado de Kafka | No comprobado |
+| Envío de órdenes | No realizado |
+
+### 22.4. Limitaciones
+
+Kafka no estuvo disponible en el equipo utilizado durante
+estas pruebas.
+
+La detección de desconexión no garantiza identificar
+inmediatamente todas las interrupciones silenciosas de red.
+
+El ejecutor permanece en Dry Run y la API en solo lectura.
+
+### 22.5. Punto de continuación
+
+Continuar en el paso 18.9 del mapa de trabajo:
+consulta y sincronización de posiciones y órdenes de IBKR.
+
+No habilitar permisos de escritura hasta completar
+y validar los controles de riesgo pendientes.
