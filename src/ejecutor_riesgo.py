@@ -5,6 +5,17 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime, timezone
 from confluent_kafka import Consumer
+from calculo_riesgo import calcular_riesgo
+from config_riesgo import (
+    SIMBOLO_PERMITIDO,
+    CAPITAL_POR_OPERACION_USD,
+    RIESGO_MAXIMO_TEORICO_USD,
+    STOP_LOSS,
+    TAKE_PROFIT,
+    MAX_POSICIONES,
+    VIGENCIA_SENAL_SEGUNDOS,
+    TOLERANCIA_FUTURA_SEGUNDOS,
+)
 
 # Base de datos local del proyecto
 ruta_bd = (
@@ -58,7 +69,7 @@ def validar(s):
     if not isinstance(s["id_algoritmo"], str) or not s["id_algoritmo"]:
         return "Algoritmo inválido"
 
-    if s["symbol"] != "EURUSD":
+    if s["symbol"] != SIMBOLO_PERMITIDO:
         return "Símbolo no autorizado"
 
     if s["signal"] not in ("BUY", "SELL"):
@@ -80,7 +91,7 @@ def validar(s):
             datetime.now(timezone.utc) - fecha
         ).total_seconds()
 
-        if diferencia > 120 or diferencia < -30:
+        if diferencia > VIGENCIA_SENAL_SEGUNDOS or diferencia < -TOLERANCIA_FUTURA_SEGUNDOS:
             return "Señal antigua o futura"
 
     except (TypeError, ValueError, AttributeError):
@@ -101,6 +112,15 @@ def procesar(s):
 
     tipo = s["signal"]
     precio = float(s["precio_referencia"])
+
+    if tipo == "BUY":
+        try:
+            riesgo = calcular_riesgo(precio)
+        except (ValueError, OverflowError):
+            return "[RECHAZADA] No se pudo calcular el riesgo"
+
+        if not riesgo["riesgo_autorizado"]:
+            return "[RECHAZADA] Riesgo monetario excedido"
 
     # Guardar posición y señal en una misma transacción
     with db:
